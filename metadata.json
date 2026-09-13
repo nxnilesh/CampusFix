@@ -1,0 +1,6 @@
+{
+  "name": "CampusFix",
+  "description": "Smart campus issue reporting and resolution platform for students and campus resolvers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,176 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  userId       String        @unique // e.g. STU1001, RES1001, ADM1001
+  name         String
+  role         String        @default("student") // "student" | "resolver" | "admin"
+  department   String?
+  year         String?       // "1st Year", "2nd Year", "3rd Year", "4th Year", "Staff"
+  studentId    String?       // Roll number / student ID card number
+  phone        String?
+  avatar       String?
+  isActive     Boolean       @default(true)
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  issuesReported  Issue[]              @relation("StudentIssues")
+  issuesAssigned  Issue[]              @relation("AssignedIssues")
+  statusUpdates   IssueStatusHistory[] @relation("ResolverHistory")
+  comments        IssueComment[]
+  notifications   Notification[]
+  settings        UserSettings?
+
+  @@index([email])
+  @@index([userId])
+  @@index([role])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  icon        String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  services    Service[]
+  issues      Issue[]
+
+  @@index([isActive])
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  slaHours    Int?      @default(48)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  issues      Issue[]
+
+  @@index([isActive])
+  @@index([categoryId])
+}
+
+model Issue {
+  id             String               @id // Format: CF-YYYY-NNNN
+  title          String
+  description    String
+  categoryId     String?
+  category       Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryName   String               // Denormalized name for fast lookup & search
+  serviceId      String?
+  service        Service?             @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  location       String
+  room           String
+  priority       String               // "Low" | "Medium" | "High"
+  status         String               @default("Reported") // "Reported" | "Acknowledged" | "Under Review" | "In Progress" | "Resolved" | "Closed" | "Rejected"
+  imageUrl       String?
+  
+  createdById    String
+  student        User                 @relation("StudentIssues", fields: [createdById], references: [id], onDelete: Cascade)
+  
+  assignedToId   String?
+  resolver       User?                @relation("AssignedIssues", fields: [assignedToId], references: [id], onDelete: SetNull)
+  
+  resolutionNote String?
+  resolvedAt     DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  history        IssueStatusHistory[]
+  comments       IssueComment[]
+  attachments    IssueAttachment[]
+
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([categoryName])
+  @@index([categoryId])
+  @@index([serviceId])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+model IssueComment {
+  id        String   @id @default(cuid())
+  issueId   String
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([issueId])
+  @@index([userId])
+}
+
+model IssueAttachment {
+  id        String   @id @default(cuid())
+  issueId   String
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  fileUrl   String
+  fileName  String
+  fileType  String
+  fileSize  Int
+  createdAt DateTime @default(now())
+
+  @@index([issueId])
+}
+
+model IssueStatusHistory {
+  id             String    @id @default(cuid())
+  issueId        String
+  issue          Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  previousStatus String
+  newStatus      String
+  changedById    String?
+  resolver       User?     @relation("ResolverHistory", fields: [changedById], references: [id], onDelete: SetNull)
+  changedByName  String?
+  note           String?
+  createdAt      DateTime  @default(now())
+
+  @@index([issueId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  issueId   String?
+  message   String
+  type      String   @default("STATUS_UPDATE")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+}
+
+model UserSettings {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme              String   @default("system") // "light" | "dark" | "system"
+  compactMode        Boolean  @default(false)
+  emailNotifications Boolean  @default(true)
+  statusAlerts       Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+}

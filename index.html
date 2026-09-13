@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CampusFix • Smart Campus Issue Management</title>
+    <meta name="description" content="Smart campus issue reporting and resolution platform for students and campus resolvers." />
+    <meta property="og:title" content="CampusFix • Smart Campus Issue Management" />
+    <meta property="og:description" content="Smart campus issue reporting and resolution platform for students and campus resolvers." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/campusfix-mark.svg" />
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem('campusfix_theme') || 'system';
+          const isDark = theme === 'dark' ||
+            (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', isDark);
+          document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+        } catch {
+          document.documentElement.style.colorScheme = 'light';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
