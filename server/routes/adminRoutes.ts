@@ -565,10 +565,7 @@ router.patch('/resolver-requests/:id', async (req: AuthenticatedRequest, res: Re
       const text = `Hello ${name},\n\nYour CampusFix Resolver application has been approved.\n\nYour account details:\n\nResolver ID: ${approvedResolverId}\nEmail: ${email}\nTemporary Password: ${temporaryPassword}\n\nSign in at: ${loginUrl}\n\nFor your security, you must change this temporary password immediately after your first sign-in. Choose a new password with at least 8 characters, including uppercase, lowercase, and a number. The temporary password will no longer work after you change it.\n\nRegards,\nCampusFix Administration`;
       const html = `<p>Hello ${escapeHtml(name)},</p><p>Your CampusFix Resolver application has been approved.</p><p>Your account details:</p><p>Resolver ID: ${escapeHtml(approvedResolverId)}<br>Email: ${escapeHtml(email)}<br>Temporary Password: ${escapeHtml(temporaryPassword)}</p><p>Sign in at: <a href="${escapeHtml(loginUrl)}">${escapeHtml(loginUrl)}</a></p><p>For your security, you must change this temporary password immediately after your first sign-in. Choose a new password with at least 8 characters, including uppercase, lowercase, and a number. The temporary password will no longer work after you change it.</p><p>Regards,<br>CampusFix Administration</p>`;
 
-      await sendEmail(
-        { to: email, subject, text, html },
-        [temporaryPassword]
-      );
+      await sendEmail({ to: email, subject, text, html });
     }
 
     return res.json({

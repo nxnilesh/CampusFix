@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import { Sendpository, SendpositoryError } from 'sendpository';
 
 type AuthEmailPurpose = 'verification' | 'password-reset';
 type EmailPurpose = AuthEmailPurpose | 'resolver-approval';
@@ -14,9 +14,7 @@ export const EMAIL_DELIVERY_ERROR =
 
 type EmailDeliveryFailure =
   | 'missing_credentials'
-  | 'smtp_authentication_failed'
-  | 'smtp_rejected'
-  | 'network_timeout'
+  | 'provider_rejected'
   | 'network_error';
 
 export class EmailDeliveryError extends Error {
@@ -56,98 +54,68 @@ export async function sendAuthOTPEmail(
     </div>
   `;
 
-  await deliverEmail(
-    { to: email, subject, text: textContent, html: htmlContent },
-    purpose,
-    [otp]
-  );
+  await deliverEmail({ to: email, subject, text: textContent, html: htmlContent }, purpose);
 }
 
-export async function sendEmail(email: EmailContent, sensitiveValues: string[] = []): Promise<void> {
-  await deliverEmail(email, 'resolver-approval', sensitiveValues);
+export async function sendEmail(email: EmailContent): Promise<void> {
+  await deliverEmail(email, 'resolver-approval');
 }
 
 async function deliverEmail(
   email: EmailContent,
-  purpose: EmailPurpose,
-  sensitiveValues: string[]
+  purpose: EmailPurpose
 ): Promise<void> {
-  const gmailUser = process.env.GMAIL_USER?.trim();
-  const gmailAppPassword = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, '');
-  console.info('[CampusFix] Starting Gmail SMTP email delivery.', {
+  const apiKey = process.env.SENDPOSITORY_API_KEY?.trim();
+  const from = process.env.SENDPOSITORY_FROM_EMAIL?.trim();
+  console.info('[CampusFix] Starting Sendpository email delivery.', {
     purpose,
     recipientDomain: email.to.trim().split('@')[1]?.toLowerCase() ?? 'unknown',
-    credentialsConfigured: Boolean(gmailUser && gmailAppPassword),
+    credentialsConfigured: Boolean(apiKey && from),
   });
 
-  if (!gmailUser || !gmailAppPassword) {
+  if (!apiKey || !from) {
     throw reportEmailFailure(
-      new EmailDeliveryError('missing_credentials', undefined, 'GMAIL_USER and GMAIL_APP_PASSWORD must be configured.'),
+      new EmailDeliveryError(
+        'missing_credentials',
+        undefined,
+        'SENDPOSITORY_API_KEY and SENDPOSITORY_FROM_EMAIL must be configured.'
+      ),
       purpose
     );
   }
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: gmailUser,
-        pass: gmailAppPassword,
-      },
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 10_000,
-    });
-    await transporter.sendMail({
-      from: gmailUser,
-      to: email.to,
+    const sendpository = new Sendpository(apiKey, { timeout: 10_000 });
+    await sendpository.emails.send({
+      from,
+      to: [email.to],
       subject: email.subject,
       text: email.text,
       html: email.html,
     });
-    console.info('[CampusFix] Gmail SMTP email delivered.', { purpose });
+    console.info('[CampusFix] Sendpository email accepted.', { purpose });
   } catch (error) {
-    const smtpError = error as NodeJS.ErrnoException & { responseCode?: number };
-    const failure: EmailDeliveryFailure =
-      smtpError.code === 'EAUTH'
-        ? 'smtp_authentication_failed'
-        : smtpError.code === 'ETIMEDOUT' || smtpError.code === 'ESOCKET'
-          ? 'network_timeout'
-          : smtpError.responseCode
-            ? 'smtp_rejected'
-            : 'network_error';
-    const diagnostic = error instanceof Error ? error.message : 'Unknown SMTP error.';
+    const providerError = error instanceof SendpositoryError ? error : undefined;
+    const failure: EmailDeliveryFailure = providerError?.type === 'connection_error'
+      ? 'network_error'
+      : 'provider_rejected';
     throw reportEmailFailure(
       new EmailDeliveryError(
         failure,
-        smtpError.responseCode,
-        redactSensitiveValues(diagnostic, [
-          gmailUser,
-          gmailAppPassword,
-          email.to,
-          ...sensitiveValues,
-        ])
+        providerError?.status || undefined,
+        providerError?.type ?? 'unexpected_error'
       ),
       purpose
     );
   }
 }
 
-function redactSensitiveValues(message: string, values: string[]): string {
-  return values.reduce(
-    (result, value) => value ? result.replaceAll(value, '[REDACTED]') : result,
-    message
-  );
-}
-
 function reportEmailFailure(error: EmailDeliveryError, purpose: EmailPurpose): EmailDeliveryError {
-  console.error('[CampusFix] Gmail SMTP email delivery failed.', {
+  console.error('[CampusFix] Sendpository email delivery failed.', {
     purpose,
     failure: error.failure,
     ...(error.providerStatus ? { providerStatus: error.providerStatus } : {}),
-    errorMessage: error.diagnostic ?? error.message,
+    ...(error.diagnostic ? { providerErrorType: error.diagnostic } : {}),
   });
   return error;
 }
