@@ -9,45 +9,87 @@ generator client {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  userId       String        @unique // e.g. STU1001, RES1001, ADM1001
-  name         String
-  role         String        @default("student") // "student" | "resolver" | "admin"
-  department   String?
-  year         String?       // "1st Year", "2nd Year", "3rd Year", "4th Year", "Staff"
-  studentId    String?       // Roll number / student ID card number
-  phone        String?
-  avatar       String?
-  isActive     Boolean       @default(true)
-  passwordHash String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  userId              String    @unique // e.g. STU1001, RES1001, ADM1001
+  name                String
+  role                String    @default("student") // "student" | "resolver" | "admin"
+  status              String    @default("ACTIVE") // "PENDING" | "ACTIVE" | "SUSPENDED" | "BLOCKED" | "DELETED"
+  emailVerified       Boolean   @default(false)
+  otpHash             String?
+  otpExpires          DateTime?
+  otpAttempts         Int       @default(0)
+  otpCreatedAt        DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  department          String?
+  year                String? // "1st Year", "2nd Year", "3rd Year", "4th Year", "Staff"
+  studentId           String? // Roll number / student ID card number
+  phone               String?
+  avatar              String?
+  isActive            Boolean   @default(true)
+  mustChangePassword  Boolean   @default(false)
+  tokenVersion        Int       @default(0)
+  passwordHash        String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Relations
-  issuesReported  Issue[]              @relation("StudentIssues")
-  issuesAssigned  Issue[]              @relation("AssignedIssues")
-  statusUpdates   IssueStatusHistory[] @relation("ResolverHistory")
-  comments        IssueComment[]
-  notifications   Notification[]
-  settings        UserSettings?
+  issuesReported           Issue[]                @relation("StudentIssues")
+  issuesAssigned           Issue[]                @relation("AssignedIssues")
+  statusUpdates            IssueStatusHistory[]   @relation("ResolverHistory")
+  comments                 IssueComment[]
+  notifications            Notification[]
+  settings                 UserSettings?
+  resolverRequests         ResolverRequest[]      @relation("ResolverRequestApplicant")
+  reviewedResolverRequests ResolverRequest[]      @relation("ResolverRequestReviewer")
+  votes                    IssueVote[]
+  activityLogs             ActivityLog[]
+  emailVerificationOTPs    EmailVerificationOTP[]
+  passwordResetTokens      PasswordResetToken[]
 
   @@index([email])
   @@index([userId])
   @@index([role])
+  @@index([status])
+}
+
+model EmailVerificationOTP {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String
+  otp       String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email, expiresAt])
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  otp       String?
+  token     String?  @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 model Category {
-  id          String    @id @default(cuid())
-  name        String    @unique
+  id          String   @id @default(cuid())
+  name        String   @unique
   description String?
   icon        String?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  services    Service[]
-  issues      Issue[]
+  services Service[]
+  issues   Issue[]
 
   @@index([isActive])
 }
@@ -63,41 +105,42 @@ model Service {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  issues      Issue[]
+  issues Issue[]
 
   @@index([isActive])
   @@index([categoryId])
 }
 
 model Issue {
-  id             String               @id // Format: CF-YYYY-NNNN
-  title          String
-  description    String
-  categoryId     String?
-  category       Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  categoryName   String               // Denormalized name for fast lookup & search
-  serviceId      String?
-  service        Service?             @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  location       String
-  room           String
-  priority       String               // "Low" | "Medium" | "High"
-  status         String               @default("Reported") // "Reported" | "Acknowledged" | "Under Review" | "In Progress" | "Resolved" | "Closed" | "Rejected"
-  imageUrl       String?
-  
-  createdById    String
-  student        User                 @relation("StudentIssues", fields: [createdById], references: [id], onDelete: Cascade)
-  
-  assignedToId   String?
-  resolver       User?                @relation("AssignedIssues", fields: [assignedToId], references: [id], onDelete: SetNull)
-  
+  id           String    @id // Format: CF-YYYY-NNNN
+  title        String
+  description  String
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryName String // Denormalized name for fast lookup & search
+  serviceId    String?
+  service      Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  location     String
+  room         String
+  priority     String // "Low" | "Medium" | "High"
+  status       String    @default("Reported") // "Reported" | "Acknowledged" | "Under Review" | "In Progress" | "Resolved" | "Closed" | "Rejected"
+  imageUrl     String?
+
+  createdById String
+  student     User   @relation("StudentIssues", fields: [createdById], references: [id], onDelete: Cascade)
+
+  assignedToId String?
+  resolver     User?   @relation("AssignedIssues", fields: [assignedToId], references: [id], onDelete: SetNull)
+
   resolutionNote String?
   resolvedAt     DateTime?
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  history        IssueStatusHistory[]
-  comments       IssueComment[]
-  attachments    IssueAttachment[]
+  history     IssueStatusHistory[]
+  comments    IssueComment[]
+  attachments IssueAttachment[]
+  votes       IssueVote[]
 
   @@index([createdById])
   @@index([assignedToId])
@@ -107,6 +150,20 @@ model Issue {
   @@index([serviceId])
   @@index([priority])
   @@index([createdAt])
+}
+
+model IssueVote {
+  id        String   @id @default(cuid())
+  issueId   String
+  issue     Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  // One vote per user per issue
+  @@unique([issueId, userId])
+  @@index([issueId])
+  @@index([userId])
 }
 
 model IssueComment {
@@ -136,16 +193,16 @@ model IssueAttachment {
 }
 
 model IssueStatusHistory {
-  id             String    @id @default(cuid())
+  id             String   @id @default(cuid())
   issueId        String
-  issue          Issue     @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issue          Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
   previousStatus String
   newStatus      String
   changedById    String?
-  resolver       User?     @relation("ResolverHistory", fields: [changedById], references: [id], onDelete: SetNull)
+  resolver       User?    @relation("ResolverHistory", fields: [changedById], references: [id], onDelete: SetNull)
   changedByName  String?
   note           String?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime @default(now())
 
   @@index([issueId])
 }
@@ -173,4 +230,47 @@ model UserSettings {
   emailNotifications Boolean  @default(true)
   statusAlerts       Boolean  @default(true)
   updatedAt          DateTime @updatedAt
+}
+
+// Resolver application workflow — students apply to become resolvers
+model ResolverRequest {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation("ResolverRequestApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  email           String
+  phone           String?
+  employeeId      String? // College ID / Employee ID
+  department      String
+  designation     String?
+  reason          String // Why they want to become a resolver
+  documentUrl     String? // Uploaded verification document
+  status          String    @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED"
+  adminNote       String? // Admin's note when approving/rejecting
+  rejectionReason String?
+  reviewedById    String?
+  reviewedBy      User?     @relation("ResolverRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([userId])
+}
+
+// Audit log for all significant system actions
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String // e.g. "LOGIN", "ISSUE_CREATED", "RESOLVER_APPROVED", "USER_SUSPENDED"
+  entityId   String? // ID of affected entity (issueId, targetUserId, etc.)
+  entityType String? // "ISSUE" | "USER" | "RESOLVER_REQUEST"
+  details    String? // JSON string with extra context
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
 }

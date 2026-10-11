@@ -102,7 +102,10 @@ export const StudentLoginPage: React.FC = () => {
               className="w-full mt-2 py-3.5 rounded-full bg-black hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-black font-bold text-xs tracking-wide uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-md"
             >
               {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Authenticating...</span>
+                </>
               ) : (
                 <>
                   <span>Sign In</span>
@@ -113,6 +116,11 @@ export const StudentLoginPage: React.FC = () => {
           </form>
 
           <div className="pt-4 border-t border-black/5 dark:border-white/5 text-center space-y-2">
+            <p className="text-xs">
+              <Link to="/forgot-password" className="font-semibold text-[#ff3b00] hover:underline">
+                Forgot password?
+              </Link>
+            </p>
             <p className="text-xs text-slate-500 dark:text-zinc-400">
               Don't have a registered account?{' '}
               <Link

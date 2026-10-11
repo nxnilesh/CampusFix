@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { createHmac } from 'crypto';
+import { prisma } from './db.js';
 
 const configuredSecret = process.env.SESSION_SECRET;
 if (process.env.NODE_ENV === 'production' && !configuredSecret) {
@@ -17,6 +19,11 @@ export interface AuthUserPayload {
   email: string;
   name: string;
   role: UserRole;
+  tokenVersion?: number;
+  status?: string;
+  isActive?: boolean;
+  emailVerified?: boolean;
+  mustChangePassword?: boolean;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -32,11 +39,20 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash);
 }
 
+export function hashAuthSecret(value: string): string {
+  return createHmac('sha256', JWT_SECRET).update(value).digest('hex');
+}
+
 export function generateToken(payload: AuthUserPayload): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
 }
 
-export function setAuthCookie(res: Response, token: string) {
+export function setAuthCookie(res: Response, token: string, role: UserRole) {
+  if (role === 'student') {
+    clearAuthCookie(res);
+    return;
+  }
+
   const isHttps = process.env.NODE_ENV === 'production';
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
@@ -58,15 +74,13 @@ export function clearAuthCookie(res: Response) {
 }
 
 export function authenticateUser(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  let token = req.cookies?.[COOKIE_NAME];
-
-  if (!token && req.headers.authorization?.startsWith('Bearer ')) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-
-  if (!token && typeof req.headers['x-auth-token'] === 'string') {
-    token = req.headers['x-auth-token'];
-  }
+  const explicitToken = req.headers.authorization?.startsWith('Bearer ')
+    ? req.headers.authorization.split(' ')[1]
+    : typeof req.headers['x-auth-token'] === 'string'
+      ? req.headers['x-auth-token']
+      : null;
+  const cookieToken = req.cookies?.[COOKIE_NAME];
+  let token = explicitToken || cookieToken;
 
   if (!token) {
     return next();
@@ -74,6 +88,10 @@ export function authenticateUser(req: AuthenticatedRequest, res: Response, next:
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as AuthUserPayload;
+    if (!explicitToken && decoded.role === 'student') {
+      clearAuthCookie(res);
+      return next();
+    }
     req.user = decoded;
   } catch (err) {
     // Expired or invalid token; leave req.user undefined
@@ -81,25 +99,72 @@ export function authenticateUser(req: AuthenticatedRequest, res: Response, next:
   next();
 }
 
-export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+async function loadCurrentUser(req: AuthenticatedRequest, res: Response) {
   if (!req.user) {
-    return res.status(401).json({
+    res.status(401).json({
       success: false,
       error: 'Authentication required. Please sign in to continue.',
     });
+    return null;
   }
-  next();
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        userId: true,
+        email: true,
+        name: true,
+        role: true,
+        status: true,
+        isActive: true,
+        emailVerified: true,
+        mustChangePassword: true,
+        tokenVersion: true,
+      },
+    });
+
+    if (
+      !user ||
+      !user.isActive ||
+      !user.emailVerified ||
+      user.status !== 'ACTIVE' ||
+      (req.user.tokenVersion ?? 0) !== user.tokenVersion
+    ) {
+      clearAuthCookie(res);
+      res.status(401).json({
+        success: false,
+        error: 'Your session is no longer valid. Please sign in again.',
+      });
+      return null;
+    }
+
+    req.user = {
+      ...user,
+      role: user.role as UserRole,
+    };
+    return user;
+  } catch (error) {
+    console.error('Error validating authenticated user:', error);
+    res.status(503).json({
+      success: false,
+      error: 'Unable to validate your session. Please try again.',
+    });
+    return null;
+  }
+}
+
+export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  const user = await loadCurrentUser(req, res);
+  if (user) next();
 }
 
 export function requireRole(expectedRoles: UserRole | UserRole[] | string | string[]) {
   const allowed = Array.isArray(expectedRoles) ? expectedRoles : [expectedRoles];
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required. Please sign in to continue.',
-      });
-    }
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const currentUser = await loadCurrentUser(req, res);
+    if (!currentUser || !req.user) return;
 
     const userRole = req.user.role;
     // Admin has access to administrative and resolver/staff endpoints
@@ -108,10 +173,20 @@ export function requireRole(expectedRoles: UserRole | UserRole[] | string | stri
       (userRole === 'admin' && (allowed.includes('resolver') || allowed.includes('staff')));
 
     if (!hasPermission) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
         error: `Access denied. This action requires ${allowed.join(' or ')} privileges.`,
       });
+      return;
+    }
+
+    if (userRole === 'resolver' && allowed.includes('resolver') && currentUser.mustChangePassword) {
+      res.status(403).json({
+        success: false,
+        error: 'Change your temporary password before accessing resolver services.',
+        requiresPasswordChange: true,
+      });
+      return;
     }
 
     next();

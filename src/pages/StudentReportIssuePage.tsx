@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useToast } from '../context/ToastContext';
@@ -16,6 +16,8 @@ import {
   HelpCircle,
   Building,
   Wrench,
+  Video,
+  ImagePlus,
 } from 'lucide-react';
 
 export const StudentReportIssuePage: React.FC = () => {
@@ -37,9 +39,69 @@ export const StudentReportIssuePage: React.FC = () => {
   const [loadingMetadata, setLoadingMetadata] = useState(true);
   const [createdIssueId, setCreatedIssueId] = useState<string | null>(null);
 
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const { success, error } = useToast();
   const navigate = useNavigate();
+
+  // Stop camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, []);
+
+  const openCamera = useCallback(async () => {
+    setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera is not supported by your browser or device.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      setCameraActive(true);
+      // Attach stream to video element after render
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 100);
+    } catch (err: any) {
+      setCameraError(err.name === 'NotAllowedError' ? 'Camera permission denied. Please allow camera access.' : 'Unable to access camera.');
+    }
+  }, []);
+
+  const capturePhoto = useCallback(() => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    const base64 = canvas.toDataURL('image/jpeg', 0.9);
+    setImageBase64(base64);
+    setImagePreview(base64);
+    setImageFileName(`campus_photo_${Date.now()}.jpg`);
+    closeCamera();
+  }, []);
+
+  const closeCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
 
   const fallbackCategories = [
     'Electrical',
@@ -453,29 +515,85 @@ export const StudentReportIssuePage: React.FC = () => {
               <span className="text-[11px] text-slate-400">Optional • Max 5MB (JPG, PNG, WEBP)</span>
             </div>
 
-            {!imagePreview ? (
-              <div
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 text-center hover:border-[#ff3b00] dark:hover:border-[#ff3b00] transition-colors cursor-pointer bg-slate-50/50 dark:bg-slate-800/20"
-              >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                />
-                <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
-                  <Camera className="w-6 h-6 text-[#ff3b00]" />
+            {/* Camera modal overlay */}
+            {cameraActive && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+                <div className="w-full max-w-lg space-y-3">
+                  <div className="relative rounded-2xl overflow-hidden bg-black border border-white/20">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full max-h-[60vh] object-contain"
+                    />
+                    {/* Viewfinder corners */}
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute top-3 left-3 w-8 h-8 border-t-2 border-l-2 border-[#ff3b00] rounded-tl-lg" />
+                      <div className="absolute top-3 right-3 w-8 h-8 border-t-2 border-r-2 border-[#ff3b00] rounded-tr-lg" />
+                      <div className="absolute bottom-3 left-3 w-8 h-8 border-b-2 border-l-2 border-[#ff3b00] rounded-bl-lg" />
+                      <div className="absolute bottom-3 right-3 w-8 h-8 border-b-2 border-r-2 border-[#ff3b00] rounded-br-lg" />
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={closeCamera}
+                      className="flex-1 py-3 rounded-full border border-white/20 text-white text-xs font-bold hover:bg-white/10 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={capturePhoto}
+                      className="flex-1 py-3 rounded-full bg-[#ff3b00] text-white text-xs font-bold hover:bg-[#e03400] transition-all flex items-center justify-center gap-2"
+                    >
+                      <Camera className="w-4 h-4" />
+                      Capture Photo
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Click to browse photo or drag and drop here
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Photos significantly speed up repair verification.
-                </p>
+              </div>
+            )}
+
+            {!imagePreview ? (
+              <div className="space-y-2">
+                {/* Drag & drop area */}
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 text-center hover:border-[#ff3b00] dark:hover:border-[#ff3b00] transition-colors cursor-pointer bg-slate-50/50 dark:bg-slate-800/20"
+                >
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                  />
+                  <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                    <ImagePlus className="w-6 h-6 text-[#ff3b00]" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Click to browse photo or drag and drop here
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Photos significantly speed up repair verification.
+                  </p>
+                </div>
+                {/* Camera capture button */}
+                <button
+                  type="button"
+                  onClick={openCamera}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:border-[#ff3b00] hover:text-[#ff3b00] dark:hover:text-[#ff3b00] transition-all"
+                >
+                  <Video className="w-4 h-4" />
+                  Take photo with camera
+                </button>
+                {cameraError && (
+                  <p className="text-[11px] text-rose-500 text-center">{cameraError}</p>
+                )}
               </div>
             ) : (
               <div className="relative rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-100 dark:bg-slate-800 p-2">

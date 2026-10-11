@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { api } from '../lib/api';
+import { LoginActivityPanel } from '../components/common/LoginActivityPanel';
 import {
   Sun,
   Moon,
@@ -180,6 +181,7 @@ export const StudentSettingsPage: React.FC = () => {
           </button>
         </div>
       </div>
+      <LoginActivityPanel />
     </div>
   );
 };

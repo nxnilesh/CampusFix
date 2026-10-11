@@ -27,13 +27,13 @@ export const DEFAULT_SERVICES = [
   { name: 'Emergency Safety & Lighting', category: 'Safety', description: 'Inspection and repair of pathway lighting and emergency alarms', slaHours: 12 },
 ];
 
-export async function seedCampusServices() {
+export async function seedCampusServices(dbClient: PrismaClient = prisma) {
   console.log('[CampusFix Seed] Initializing campus categories and services...');
 
   const categoryMap = new Map<string, string>();
 
   for (const cat of DEFAULT_CATEGORIES) {
-    const record = await prisma.category.upsert({
+    const record = await dbClient.category.upsert({
       where: { name: cat.name },
       update: { description: cat.description, icon: cat.icon, isActive: true },
       create: { name: cat.name, description: cat.description, icon: cat.icon, isActive: true },
@@ -43,7 +43,7 @@ export async function seedCampusServices() {
 
   for (const svc of DEFAULT_SERVICES) {
     const categoryId = categoryMap.get(svc.category) || null;
-    await prisma.service.upsert({
+    await dbClient.service.upsert({
       where: { name: svc.name },
       update: {
         description: svc.description,
@@ -62,9 +62,10 @@ export async function seedCampusServices() {
   }
 
   console.log(`[CampusFix Seed] Successfully seeded ${DEFAULT_CATEGORIES.length} categories and ${DEFAULT_SERVICES.length} campus services.`);
+  return { categoriesCount: DEFAULT_CATEGORIES.length, servicesCount: DEFAULT_SERVICES.length };
 }
 
-if (process.argv[1]?.endsWith('seed.ts')) {
+if (process.argv[1]?.includes('seed')) {
   seedCampusServices()
     .catch((e) => {
       console.error('[CampusFix Seed] Error seeding data:', e);

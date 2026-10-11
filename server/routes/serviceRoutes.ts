@@ -67,13 +67,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     if (isDatabaseConnectionError(error)) {
-      console.warn('[CampusFix DB] Notice: PostgreSQL is not connected yet, serving default campus services catalog.');
-      return res.json({
-        success: true,
-        data: DEFAULT_SERVICES,
-        count: DEFAULT_SERVICES.length,
-        notice: DATABASE_UNAVAILABLE_MESSAGE,
-      });
+      return res.status(503).json({ success: false, error: DATABASE_UNAVAILABLE_MESSAGE });
     }
 
     console.error('Error fetching campus services:', error);

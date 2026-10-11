@@ -1,10 +1,40 @@
 import { Router, Response } from 'express';
 import { prisma } from '../db.js';
-import { AuthenticatedRequest, requireAuth, hashPassword, comparePassword } from '../auth.js';
+import {
+  AuthenticatedRequest,
+  requireAuth,
+  hashPassword,
+  comparePassword,
+  generateToken,
+  setAuthCookie,
+  UserRole,
+} from '../auth.js';
 import { z } from 'zod';
 
 const router = Router();
 router.use(requireAuth);
+
+// GET /api/users/login-activity — Recent successful logins for the current user
+router.get('/login-activity', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const activity = await prisma.activityLog.findMany({
+      where: { userId: req.user!.id, action: 'LOGIN' },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        details: true,
+        ipAddress: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json({ success: true, data: activity });
+  } catch (error) {
+    console.error('Error fetching login activity:', error);
+    return res.status(500).json({ success: false, error: 'Failed to load login activity.' });
+  }
+});
 
 const updateProfileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(60),
@@ -38,9 +68,14 @@ router.get('/profile', async (req: AuthenticatedRequest, res: Response) => {
         id: true,
         userId: true,
         name: true,
+        email: true,
         role: true,
+        status: true,
         department: true,
         year: true,
+        studentId: true,
+        phone: true,
+        avatar: true,
         createdAt: true,
         updatedAt: true,
         settings: true,
@@ -82,9 +117,14 @@ router.patch('/profile', async (req: AuthenticatedRequest, res: Response) => {
         id: true,
         userId: true,
         name: true,
+        email: true,
         role: true,
+        status: true,
         department: true,
         year: true,
+        studentId: true,
+        phone: true,
+        avatar: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -130,16 +170,45 @@ router.patch('/password', async (req: AuthenticatedRequest, res: Response) => {
       });
     }
 
+    if (user.mustChangePassword && await comparePassword(newPassword, user.passwordHash)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Choose a new password different from your temporary password.',
+      });
+    }
+
     const newHash = await hashPassword(newPassword);
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash: newHash },
+    const changed = await prisma.user.updateMany({
+      where: { id: user.id, tokenVersion: req.user!.tokenVersion ?? 0 },
+      data: {
+        passwordHash: newHash,
+        mustChangePassword: false,
+        tokenVersion: { increment: 1 },
+      },
     });
+    if (changed.count !== 1) {
+      return res.status(401).json({
+        success: false,
+        error: 'Your session has expired. Please sign in again.',
+      });
+    }
+
+    const tokenVersion = (req.user!.tokenVersion ?? 0) + 1;
+    const token = generateToken({
+      id: user.id,
+      userId: user.userId,
+      email: user.email,
+      name: user.name,
+      role: user.role as UserRole,
+      tokenVersion,
+    });
+    setAuthCookie(res, token, user.role as UserRole);
 
     return res.json({
       success: true,
       message: 'Password changed successfully.',
+      data: { token, mustChangePassword: false },
     });
   } catch (error) {
     console.error('Error changing password:', error);

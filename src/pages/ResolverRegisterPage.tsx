@@ -1,268 +1,275 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import {
-  Eye,
-  EyeOff,
-  CheckCircle2,
-  Lock,
-  User,
-  Mail,
-  Building,
   ArrowRight,
+  Building,
+  CheckCircle2,
+  KeyRound,
   Loader2,
+  Mail,
   ShieldCheck,
+  User,
 } from 'lucide-react';
 
+const departments = [
+  'Campus Infrastructure & Maintenance',
+  'IT & Network Operations',
+  'Electrical Services',
+  'Civil Maintenance',
+  'Laboratory Support',
+  'Safety & Security',
+  'General Administration',
+  'Hostel Management',
+  'Sports & Facilities',
+  'Library Services',
+];
+
 export const ResolverRegisterPage: React.FC = () => {
+  const { error, success } = useToast();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [userId, setUserId] = useState('');
-  const [department, setDepartment] = useState('Campus Infrastructure & Maintenance');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [employeeId, setEmployeeId] = useState('');
+  const [department, setDepartment] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
-  const { error, success } = useToast();
-  const navigate = useNavigate();
+  const handleRegister = async (event: React.FormEvent) => {
+    event.preventDefault();
 
-  const resolverDepartments = [
-    'Campus Infrastructure & Maintenance',
-    'IT & Network Operations',
-    'Electrical Services',
-    'Civil Maintenance',
-    'Laboratory Support',
-    'Safety & Security',
-    'General Administration',
-  ];
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!name.trim() || !email.trim() || !password) {
-      error('Please fill in your name, email, and password.');
+    if (!name.trim() || !email.trim() || !employeeId.trim() || !department) {
+      error('Please complete all resolver registration fields.');
       return;
     }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      error('Please enter a valid staff email address.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      error('Please enter a valid official email address.');
       return;
     }
-
-    if (password.length < 8) {
-      error('Password must be at least 8 characters long.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      error('Passwords do not match.');
-      return;
-    }
-
     try {
       setLoading(true);
       await api.registerResolver({
         name: name.trim(),
         email: email.trim(),
-        userId: userId.trim() ? userId.trim().toUpperCase() : undefined,
+        employeeId: employeeId.trim(),
         department,
-        password,
       });
-      success('Staff account registered successfully.');
-      setIsSuccess(true);
-    } catch (err: any) {
-      error(err.message || 'Registration failed.');
+      setVerificationSent(true);
+      success('A verification code has been sent to your official email.');
+    } catch (err: unknown) {
+      error(err instanceof Error ? err.message : 'Resolver registration failed.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (isSuccess) {
-    return (
-      <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12 bg-[#ececee] dark:bg-[#0a0a0c]">
-        <div className="w-full max-w-md p-8 sm:p-10 rounded-3xl bg-black text-white border border-white/15 shadow-2xl text-center space-y-4 animate-in zoom-in-95 duration-200">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 border border-white/10 mb-2 shadow-md">
-            <CheckCircle2 className="w-7 h-7 text-[#ff3b00]" />
-          </div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-white font-display">
-            Staff Identity Registered.
-          </h2>
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Staff account for <strong className="text-white font-bold">{email}</strong> is provisioned for campus facilities oversight.
-          </p>
-          <button
-            type="button"
-            onClick={() => navigate('/resolver/login')}
-            className="w-full mt-4 py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wide transition-all flex items-center justify-center gap-2"
-          >
-            <span>Continue to Resolver Sign In</span>
-            <ArrowRight className="w-3.5 h-3.5 text-[#ff3b00]" />
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleVerifyEmail = async (event: React.FormEvent) => {
+    event.preventDefault();
+    try {
+      setLoading(true);
+      await api.verifyEmail({ email: email.trim(), otp });
+      setEmailVerified(true);
+      success('Email verified. Your resolver account is awaiting administrator approval.');
+    } catch (err: unknown) {
+      error(err instanceof Error ? err.message : 'Unable to verify your email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    try {
+      setLoading(true);
+      await api.resendVerificationCode(email.trim());
+      success('A new verification code has been sent.');
+    } catch (err: unknown) {
+      error(err instanceof Error ? err.message : 'Unable to send a verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12 bg-[#ececee] dark:bg-[#0a0a0c] transition-colors">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-lg">
         <div className="p-8 sm:p-10 rounded-3xl bg-black text-white border border-white/15 shadow-2xl space-y-6">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#ff3b00] shadow-[0_0_8px_#ff3b00]" />
               <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400">
-                Facilities Administration
+                Facilities Administration & Operations
               </span>
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight text-white font-display">
-              Register Staff ID
+              {emailVerified ? 'Registration Submitted' : verificationSent ? 'Verify Official Email' : 'Resolver Registration'}
             </h1>
             <p className="text-xs text-zinc-400">
-              Create an administrative resolver account to process campus maintenance dispatches.
+              {emailVerified
+                ? 'Your email is verified. Your resolver account will be activated after administrator approval.'
+                : verificationSent
+                  ? <>Enter the 6-digit verification code sent to <strong className="text-white">{email}</strong>.</>
+                  : 'Register your campus staff account. Resolver access is granted only after administrator approval.'}
             </p>
           </div>
 
-          <form onSubmit={handleRegister} noValidate className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 mb-1 font-mono uppercase tracking-wider">
-                Full Name <span className="text-[#ff3b00]">*</span>
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Rahul Verma"
-                  required
-                  className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
-                />
+          {emailVerified ? (
+            <div className="space-y-5 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 border border-white/10">
+                <CheckCircle2 className="w-7 h-7 text-[#ff3b00]" />
               </div>
+              <p className="text-sm font-bold">Email Verified — Approval Pending</p>
+              <p className="text-xs text-zinc-400">
+                Your application is pending administrator review. Resolver access will be granted only after approval.
+              </p>
+              <Link
+                to="/resolver/login"
+                className="w-full py-3.5 rounded-full bg-white hover:bg-zinc-200 text-black font-bold text-xs uppercase tracking-wide transition-all flex items-center justify-center gap-2"
+              >
+                <span>Return to Resolver Portal</span>
+                <ArrowRight className="w-3.5 h-3.5 text-[#ff3b00]" />
+              </Link>
             </div>
-
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 mb-1 font-mono uppercase tracking-wider">
-                Staff Email <span className="text-[#ff3b00]">*</span>
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="staff@campus.edu"
-                  required
-                  className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-zinc-300 font-mono uppercase tracking-wider">
-                  Resolver / Staff ID
-                </label>
-                <span className="text-[10px] text-zinc-500 font-mono">Optional</span>
-              </div>
-              <div className="relative">
-                <ShieldCheck className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value.toUpperCase())}
-                  placeholder="e.g. RES1001 (auto-generated if blank)"
-                  className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 mb-1 font-mono uppercase tracking-wider">
-                Department / Unit
-              </label>
-              <div className="relative">
-                <Building className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-xs focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all appearance-none"
-                >
-                  {resolverDepartments.map((d) => (
-                    <option key={d} value={d} className="bg-zinc-900 text-white">
-                      {d}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 mb-1 font-mono uppercase tracking-wider">
-                Password <span className="text-[#ff3b00]">*</span>
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min 8 chars, 1 uppercase, 1 number"
-                  required
-                  className="w-full pl-11 pr-11 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
-                />
+          ) : verificationSent ? (
+            <div className="space-y-4">
+              <form onSubmit={handleVerifyEmail} className="space-y-4">
+                <div>
+                  <label htmlFor="resolver-otp" className="block text-xs font-bold text-zinc-300 mb-1.5 font-mono uppercase tracking-wider">
+                    Verification Code
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="resolver-otp"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={otp}
+                      onChange={(event) => setOtp(event.target.value.replace(/\D/g, ''))}
+                      placeholder="Enter the 6-digit code"
+                      autoComplete="one-time-code"
+                      required
+                      className="w-full pl-11 pr-4 py-3 rounded-2xl border border-white/15 bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
+                    />
+                  </div>
+                </div>
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
-                  aria-label="Toggle password"
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-3.5 rounded-full bg-[#ff3b00] hover:bg-[#e03400] text-white font-bold text-xs tracking-wide uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Verify Email <ArrowRight className="w-3.5 h-3.5" /></>}
                 </button>
-              </div>
+              </form>
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={loading}
+                className="w-full text-xs font-semibold text-[#ff3b00] hover:underline disabled:opacity-50"
+              >
+                Resend verification code
+              </button>
             </div>
-
-            <div>
-              <label className="block text-xs font-bold text-zinc-300 mb-1 font-mono uppercase tracking-wider">
-                Confirm Password <span className="text-[#ff3b00]">*</span>
-              </label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter password"
-                  required
-                  className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
-                />
+          ) : (
+            <form onSubmit={handleRegister} noValidate className="space-y-4">
+              <div>
+                <label htmlFor="resolver-name" className="block text-xs font-bold text-zinc-300 mb-1.5 font-mono uppercase tracking-wider">
+                  Name
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="resolver-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Your full name"
+                    autoComplete="name"
+                    required
+                    className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
+                  />
+                </div>
               </div>
-            </div>
+              <div>
+                <label htmlFor="resolver-email" className="block text-xs font-bold text-zinc-300 mb-1.5 font-mono uppercase tracking-wider">
+                  Official Email
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="resolver-email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="staff@campus.edu"
+                    autoComplete="email"
+                    required
+                    className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="resolver-employee-id" className="block text-xs font-bold text-zinc-300 mb-1.5 font-mono uppercase tracking-wider">
+                  Staff ID / Employee ID
+                </label>
+                <div className="relative">
+                  <ShieldCheck className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="resolver-employee-id"
+                    value={employeeId}
+                    onChange={(event) => setEmployeeId(event.target.value)}
+                    placeholder="Your campus staff ID"
+                    autoComplete="off"
+                    required
+                    className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="resolver-department" className="block text-xs font-bold text-zinc-300 mb-1.5 font-mono uppercase tracking-wider">
+                  Department
+                </label>
+                <div className="relative">
+                  <Building className="w-4 h-4 text-zinc-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
+                    id="resolver-department"
+                    value={department}
+                    onChange={(event) => setDepartment(event.target.value)}
+                    required
+                    className="w-full pl-11 pr-4 py-2.5 rounded-2xl border border-white/15 bg-zinc-900 text-xs focus:outline-none focus:ring-2 focus:ring-[#ff3b00] text-white transition-all appearance-none"
+                  >
+                    <option value="" disabled>Select department</option>
+                    {departments.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-500">
+                If approved, you will receive a temporary password by email and be required to change it after signing in.
+              </p>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-2 py-3.5 rounded-full bg-[#ff3b00] hover:bg-[#e03400] text-white font-bold text-xs tracking-wide uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-md shadow-[#ff3b00]/20"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <>Submit Application <ArrowRight className="w-3.5 h-3.5" /></>}
+              </button>
+            </form>
+          )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full mt-3 py-3.5 rounded-full bg-[#ff3b00] hover:bg-[#e03400] text-white font-bold text-xs tracking-wide uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-md shadow-[#ff3b00]/20"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-              ) : (
-                <>
-                  <span>Create Resolver Identity</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-white" />
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="pt-4 border-t border-white/10 text-center">
-            <p className="text-xs text-zinc-400">
-              Already have resolver access?{' '}
-              <Link to="/resolver/login" className="font-bold text-white hover:text-[#ff3b00] underline">
-                Sign in here
+          <div className="pt-4 border-t border-white/10 text-center space-y-2">
+            {!verificationSent && (
+              <p className="text-xs text-zinc-500">
+                Already registered?{' '}
+                <Link to="/resolver/login" className="font-bold text-white hover:text-[#ff3b00] underline">
+                  Resolver Sign In
+                </Link>
+              </p>
+            )}
+            <p className="text-xs text-zinc-500">
+              Looking for student issue reporting?{' '}
+              <Link to="/student/register" className="font-semibold text-zinc-300 hover:text-white underline">
+                Student Registration
               </Link>
             </p>
           </div>

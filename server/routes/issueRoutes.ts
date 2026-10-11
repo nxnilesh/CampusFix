@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { prisma } from '../db.js';
 import { AuthenticatedRequest, requireAuth, requireRole } from '../auth.js';
+import { logActivity } from '../activityLog.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -60,72 +61,75 @@ router.post('/', requireRole('student'), async (req: AuthenticatedRequest, res: 
       if (foundCat) effectiveCategoryId = foundCat.id;
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Create Issue
-      const issue = await tx.issue.create({
-        data: {
-          id: issueId,
-          createdById: req.user!.id,
-          title,
-          categoryName: category,
-          categoryId: effectiveCategoryId,
-          serviceId: serviceId || null,
-          location,
-          room,
-          priority,
-          description,
-          imageUrl: imageUrl || null,
-          status: 'Reported',
-        },
-        include: {
-          category: true,
-          service: true,
-        },
-      });
+    // Create the issue (core operation — must succeed)
+    const result = await prisma.issue.create({
+      data: {
+        id: issueId,
+        createdById: req.user!.id,
+        title,
+        categoryName: category,
+        categoryId: effectiveCategoryId,
+        serviceId: serviceId || null,
+        location,
+        room,
+        priority,
+        description,
+        imageUrl: imageUrl || null,
+        status: 'Reported',
+      },
+      include: {
+        category: true,
+        service: true,
+      },
+    });
 
-      // 2. Initial status history audit record
-      await tx.issueStatusHistory.create({
+    // Fire-and-forget: status history, notifications (do not block issue creation)
+    Promise.allSettled([
+      // Initial status history audit record
+      prisma.issueStatusHistory.create({
         data: {
-          issueId: issue.id,
+          issueId: result.id,
           previousStatus: 'None',
           newStatus: 'Reported',
           changedById: req.user!.id,
           changedByName: req.user!.name,
           note: 'Issue reported by student',
         },
-      });
-
-      // 3. Notification for student
-      await tx.notification.create({
+      }),
+      // Notification for student
+      prisma.notification.create({
         data: {
           userId: req.user!.id,
-          issueId: issue.id,
-          message: `Your issue ${issue.id} ("${title}") was reported successfully.`,
+          issueId: result.id,
+          message: `Your issue ${result.id} ("${title}") was reported successfully.`,
           type: 'ISSUE_REPORTED',
         },
-      });
-
-      // 4. Notifications for on-duty resolvers/staff
-      const resolvers = await tx.user.findMany({
-        where: {
-          role: { in: ['resolver', 'admin'] },
-          isActive: true,
-        },
+      }),
+      // Notifications for on-duty resolvers/staff
+      prisma.user.findMany({
+        where: { role: { in: ['resolver', 'admin'] }, isActive: true },
         select: { id: true },
-      });
+      }).then((resolvers) => {
+        if (resolvers.length > 0) {
+          return prisma.notification.createMany({
+            data: resolvers.map((r) => ({
+              userId: r.id,
+              issueId: result.id,
+              message: `New ${priority}-priority issue ${result.id} reported in ${location} (${room}).`,
+              type: 'NEW_ISSUE',
+            })),
+          });
+        }
+      }),
+    ]).catch((err) => console.error('[IssueRoutes] Post-creation side-effects error:', err));
 
-      if (resolvers.length > 0) {
-        await tx.notification.createMany({
-          data: resolvers.map((r) => ({
-            userId: r.id,
-            issueId: issue.id,
-            message: `New ${priority}-priority issue ${issue.id} reported in ${location} (${room}).`,
-            type: 'NEW_ISSUE',
-          })),
-        });
-      }
-
-      return issue;
+    await logActivity({
+      userId: req.user!.id,
+      action: 'ISSUE_CREATED',
+      entityId: result.id,
+      entityType: 'ISSUE',
+      details: { title: result.title, priority: result.priority, location: result.location },
+      req,
     });
 
     return res.status(201).json({

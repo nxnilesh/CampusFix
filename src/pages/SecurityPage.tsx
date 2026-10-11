@@ -39,7 +39,7 @@ export const SecurityPage: React.FC = () => {
             </h2>
           </div>
           <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">
-            Sessions are validated server-side using signed JWT tokens passed exclusively inside <code className="px-1.5 py-0.5 rounded-md bg-black/5 dark:bg-white/10 font-mono text-[11px] text-[#ff3b00]">httpOnly</code> and <code className="px-1.5 py-0.5 rounded-md bg-black/5 dark:bg-white/10 font-mono text-[11px] text-[#ff3b00]">SameSite=Lax</code> cookies, preventing client-side script token theft.
+            Sessions are validated server-side using signed JWTs. Student tokens are scoped to the current browser tab; Resolver and Admin sessions use <code className="px-1.5 py-0.5 rounded-md bg-black/5 dark:bg-white/10 font-mono text-[11px] text-[#ff3b00]">httpOnly</code> and <code className="px-1.5 py-0.5 rounded-md bg-black/5 dark:bg-white/10 font-mono text-[11px] text-[#ff3b00]">SameSite=Lax</code> cookies.
           </p>
         </div>
 

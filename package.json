@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "admin:create": "tsx scripts/createAdmin.ts",
+    "create-admin": "tsx scripts/createAdmin.ts",
+    "admin:create": "npm run create-admin",
     "db:seed": "tsx prisma/seed.ts",
     "db:migrate": "prisma migrate deploy"
   },
@@ -26,6 +27,7 @@
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
+    "nodemailer": "^10.1.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-router-dom": "^7.18.3",
@@ -45,5 +47,8 @@
     "tsx": "^4.23.13",
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

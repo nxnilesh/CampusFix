@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../lib/api';
-import { IssueItem } from '../types';
 import { StatCard } from '../components/common/StatCard';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { PriorityBadge } from '../components/common/PriorityBadge';
@@ -17,94 +16,75 @@ import {
   Activity,
 } from 'lucide-react';
 
+interface ResolverAnalytics {
+  totalIssues: number;
+  resolvedIssues: number;
+  unresolvedIssues: number;
+  highPriorityIssues: number;
+  resolutionRate: number;
+  mostReportedCategory: string;
+  mostAffectedLocation: string;
+  categoryDistribution: Array<{ category: string; count: number }>;
+  statusDistribution: Array<{ status: string; count: number }>;
+  priorityDistribution: Array<{ priority: string; count: number }>;
+  locationDistribution: Array<{ location: string; count: number }>;
+  recentActivity: Array<{
+    id: string;
+    newStatus: string;
+    note: string | null;
+    changedByName: string | null;
+    createdAt: string;
+    issue: { id: string; title: string };
+  }>;
+}
+
 export const ResolverAnalyticsPage: React.FC = () => {
-  const [issues, setIssues] = useState<IssueItem[]>([]);
+  const [analytics, setAnalytics] = useState<ResolverAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        setLoading(true);
-        const res = await api.getResolverIssues({ limit: '500' });
-        setIssues(res.issues || []);
-      } catch (err) {
-        console.error('Failed to load issues for analytics:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAll();
+    api.getAnalytics()
+      .then(setAnalytics)
+      .catch((err) => console.error('Failed to load resolver analytics:', err))
+      .finally(() => setLoading(false));
   }, []);
 
-  const total = issues.length;
-  const resolved = issues.filter((i) => i.status === 'Resolved').length;
-  const unresolved = total - resolved;
-  const highPriority = issues.filter((i) => i.priority === 'High' && i.status !== 'Resolved').length;
-  const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
-
-  // Most reported category
-  const categoryCounts: Record<string, number> = {};
-  issues.forEach((i) => {
-    categoryCounts[i.category] = (categoryCounts[i.category] || 0) + 1;
-  });
-
-  const sortedCategories = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
-  const mostReportedCategory = sortedCategories[0]?.[0] || 'None';
-
-  // Most affected location
-  const locationCounts: Record<string, number> = {};
-  issues.forEach((i) => {
-    locationCounts[i.location] = (locationCounts[i.location] || 0) + 1;
-  });
-
-  const sortedLocations = Object.entries(locationCounts).sort((a, b) => b[1] - a[1]);
-  const mostAffectedLocation = sortedLocations[0]?.[0] || 'None';
-
-  // Status breakdown
+  const total = analytics?.totalIssues ?? 0;
+  const resolved = analytics?.resolvedIssues ?? 0;
+  const unresolved = analytics?.unresolvedIssues ?? 0;
+  const highPriority = analytics?.highPriorityIssues ?? 0;
+  const resolutionRate = Math.round(analytics?.resolutionRate ?? 0);
+  const sortedCategories = (analytics?.categoryDistribution ?? [])
+    .map(({ category, count }) => [category, count] as [string, number]);
+  const mostReportedCategory = analytics?.mostReportedCategory || 'None';
+  const locationCounts = Object.fromEntries(
+    (analytics?.locationDistribution ?? []).map(({ location, count }) => [location, count])
+  );
+  const mostAffectedLocation = analytics?.mostAffectedLocation || 'None';
+  const countForStatus = (status: string) =>
+    analytics?.statusDistribution.find((item) => item.status === status)?.count ?? 0;
   const statusCounts = {
-    Reported: issues.filter((i) => i.status === 'Reported').length,
-    'Under Review': issues.filter((i) => i.status === 'Under Review').length,
-    'In Progress': issues.filter((i) => i.status === 'In Progress').length,
-    Resolved: resolved,
+    Reported: countForStatus('Reported'),
+    'Under Review': countForStatus('Under Review'),
+    'In Progress': countForStatus('In Progress'),
+    Resolved: countForStatus('Resolved'),
   };
-
-  // Priority breakdown
+  const countForPriority = (priority: string) =>
+    analytics?.priorityDistribution.find((item) => item.priority === priority)?.count ?? 0;
   const priorityCounts = {
-    High: issues.filter((i) => i.priority === 'High').length,
-    Medium: issues.filter((i) => i.priority === 'Medium').length,
-    Low: issues.filter((i) => i.priority === 'Low').length,
+    High: countForPriority('High'),
+    Medium: countForPriority('Medium'),
+    Low: countForPriority('Low'),
   };
-
-  // Recent activity feed extracted from all histories
-  const allActivities: Array<{
-    id: string;
-    issueId: string;
-    issueTitle: string;
-    newStatus: string;
-    note?: string;
-    changedBy?: string;
-    createdAt: string;
-  }> = [];
-
-  issues.forEach((issue) => {
-    if (issue.history) {
-      issue.history.forEach((h) => {
-        allActivities.push({
-          id: h.id,
-          issueId: issue.id,
-          issueTitle: issue.title,
-          newStatus: h.newStatus,
-          note: h.note,
-          changedBy: h.changedBy,
-          createdAt: h.createdAt,
-        });
-      });
-    }
-  });
-
-  const sortedActivities = allActivities
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 6);
+  const sortedActivities = (analytics?.recentActivity ?? []).slice(0, 6).map((activity) => ({
+    id: activity.id,
+    issueId: activity.issue.id,
+    issueTitle: activity.issue.title,
+    newStatus: activity.newStatus,
+    note: activity.note,
+    changedBy: activity.changedByName,
+    createdAt: activity.createdAt,
+  }));
 
   if (loading) {
     return (
@@ -176,7 +156,7 @@ export const ResolverAnalyticsPage: React.FC = () => {
               {mostReportedCategory}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              {categoryCounts[mostReportedCategory] || 0} issues reported ({total > 0 ? Math.round(((categoryCounts[mostReportedCategory] || 0) / total) * 100) : 0}% of all)
+              {sortedCategories[0]?.[1] || 0} issues reported ({total > 0 ? Math.round(((sortedCategories[0]?.[1] || 0) / total) * 100) : 0}% of all)
             </p>
           </div>
         </div>

@@ -64,13 +64,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     if (isDatabaseConnectionError(error)) {
-      console.warn('[CampusFix DB] Notice: PostgreSQL is not connected yet, serving default category catalog.');
-      return res.json({
-        success: true,
-        data: DEFAULT_CATALOG,
-        count: DEFAULT_CATALOG.length,
-        notice: DATABASE_UNAVAILABLE_MESSAGE,
-      });
+      return res.status(503).json({ success: false, error: DATABASE_UNAVAILABLE_MESSAGE });
     }
 
     console.error('Error fetching categories:', error);

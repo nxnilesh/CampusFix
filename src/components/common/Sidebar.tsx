@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
@@ -12,6 +12,7 @@ import {
   HelpCircle,
   Shield,
   ArrowRight,
+  BarChart2,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -96,12 +97,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
         </NavLink>
         <span>•</span>
         <NavLink
-          to="/security"
+          to="/transparency"
           onClick={onCloseMobile}
           className="hover:text-[#ff3b00] transition-colors flex items-center gap-1"
         >
-          <Shield className="w-3.5 h-3.5" />
-          Security
+          <BarChart2 className="w-3.5 h-3.5" />
+          Transparency
         </NavLink>
       </div>
     </aside>

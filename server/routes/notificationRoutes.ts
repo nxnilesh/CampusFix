@@ -29,6 +29,25 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// PATCH /api/notifications/read-all — MUST be registered before /:id/read
+// Otherwise Express routes "read-all" to /:id/read with id="read-all"
+router.patch('/read-all', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await prisma.notification.updateMany({
+      where: { userId: req.user!.id, read: false },
+      data: { read: true },
+    });
+
+    return res.json({
+      success: true,
+      message: 'All notifications marked as read.',
+    });
+  } catch (error) {
+    console.error('Error marking all notifications read:', error);
+    return res.status(500).json({ success: false, error: 'Failed to mark notifications read.' });
+  }
+});
+
 // PATCH /api/notifications/:id/read
 router.patch('/:id/read', async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -55,24 +74,6 @@ router.patch('/:id/read', async (req: AuthenticatedRequest, res: Response) => {
   } catch (error) {
     console.error('Error marking notification read:', error);
     return res.status(500).json({ success: false, error: 'Failed to update notification.' });
-  }
-});
-
-// PATCH /api/notifications/read-all
-router.patch('/read-all', async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    await prisma.notification.updateMany({
-      where: { userId: req.user!.id, read: false },
-      data: { read: true },
-    });
-
-    return res.json({
-      success: true,
-      message: 'All notifications marked as read.',
-    });
-  } catch (error) {
-    console.error('Error marking all notifications read:', error);
-    return res.status(500).json({ success: false, error: 'Failed to mark notifications read.' });
   }
 });
 

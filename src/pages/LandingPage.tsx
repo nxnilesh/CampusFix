@@ -304,11 +304,19 @@ export const LandingPage: React.FC = () => {
           </Link>
 
           <Link
-            to="/resolver/login"
+            to="/transparency"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-black/20 dark:border-white/20 hover:border-black dark:hover:border-white text-black dark:text-white font-bold text-xs transition-all"
           >
-            <span>Resolver Administration</span>
+            <span>Issue Transparency</span>
             <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+
+          <Link
+            to="/become-a-resolver"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full border border-black/10 dark:border-white/10 hover:border-black/30 dark:hover:border-white/30 text-slate-600 dark:text-zinc-400 font-bold text-xs transition-all"
+          >
+            <span>Become a Resolver</span>
+            <ChevronRight className="w-3.5 h-3.5" />
           </Link>
         </div>
       </section>

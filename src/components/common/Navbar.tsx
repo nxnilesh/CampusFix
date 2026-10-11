@@ -26,6 +26,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, isSidebarOpen }) => {
   const { user, logout, isResolver } = useAuth();
+  const showAccount = user !== null && user.role !== 'admin';
   const { theme, setTheme } = useTheme();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const homeNavigationTimer = useRef<number | null>(null);
@@ -65,8 +66,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, isSidebarOpen }
   const navLinks = [
     { label: 'Home', path: '/' },
     { label: 'About', path: '/about' },
-    { label: 'Security', path: '/security' },
-    ...(user
+    { label: 'Transparency', path: '/transparency' },
+    ...(showAccount
       ? [
           {
             label: isResolver ? 'Resolver Portal' : 'Student Portal',
@@ -74,8 +75,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, isSidebarOpen }
           },
         ]
       : [
-          { label: 'Student Login', path: '/student/login' },
-          { label: 'Resolver Login', path: '/resolver/login' },
+          // Only Student Login is public — resolver login is not advertised
+          { label: 'Sign In', path: '/student/login' },
         ]),
   ];
 
@@ -128,12 +129,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, isSidebarOpen }
       {/* Right Actions */}
       <div className="flex items-center gap-3">
         {/* Notification Bell (Only when logged in) */}
-        {user && <NotificationDropdown />}
+        {showAccount && <NotificationDropdown />}
 
 
 
         {/* Account or Sign in pill */}
-        {user ? (
+        {showAccount ? (
           <div className="relative">
             <button
               type="button"
@@ -211,11 +212,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, isSidebarOpen }
               Sign in
             </Link>
             <Link
-              to="/student/report"
+              to="/student/register"
               className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-black dark:bg-white text-white dark:text-black text-xs font-bold hover:opacity-90 shadow-md transition-all group"
             >
               <span className="w-2 h-2 rounded-full bg-[#ff3b00] shadow-[0_0_8px_#ff3b00] group-hover:scale-125 transition-transform" />
-              <span>Report Issue</span>
+              <span>Register</span>
             </Link>
           </div>
         )}

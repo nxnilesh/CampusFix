@@ -1,4 +1,5 @@
 export type UserRole = 'student' | 'resolver' | 'admin';
+export type UserStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'BLOCKED' | 'DELETED';
 
 export type IssueCategory =
   | 'Electrical'
@@ -38,18 +39,23 @@ export type IssueStatus =
   | 'Closed'
   | 'Rejected';
 
+export type ResolverRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
+
 export interface User {
   id: string;
   userId: string; // e.g. STU1001, RES1001, ADM1001
   email: string;
   name: string;
   role: UserRole;
+  status?: UserStatus;
+  emailVerified?: boolean;
   department?: string | null;
   year?: string | null;
   studentId?: string | null;
   phone?: string | null;
   avatar?: string | null;
   isActive?: boolean;
+  mustChangePassword?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -129,6 +135,7 @@ export interface Issue {
   resolvedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  voteCount?: number;
   student?: {
     id: string;
     name: string;
@@ -145,6 +152,7 @@ export interface Issue {
   } | null;
   history?: IssueStatusHistoryItem[];
   comments?: IssueCommentItem[];
+  _count?: { votes: number; comments: number };
 }
 
 export type IssueItem = Issue;
@@ -175,6 +183,85 @@ export interface CampusAnalytics {
   priorityDistribution: { priority: string; count: number }[];
   locationDistribution?: { location: string; count: number }[];
   recentActivity: IssueStatusHistoryItem[];
+}
+
+export interface ResolverRequest {
+  id: string;
+  userId: string;
+  fullName: string;
+  email: string;
+  phone?: string | null;
+  employeeId?: string | null;
+  department: string;
+  designation?: string | null;
+  reason: string;
+  documentUrl?: string | null;
+  status: ResolverRequestStatus;
+  adminNote?: string | null;
+  rejectionReason?: string | null;
+  reviewedById?: string | null;
+  reviewedBy?: Pick<User, 'id' | 'userId' | 'name'> | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  user?: Pick<User, 'id' | 'userId' | 'name' | 'email' | 'role' | 'status' | 'emailVerified' | 'department'>;
+}
+
+export interface ActivityLog {
+  id: string;
+  userId?: string | null;
+  action: string;
+  entityId?: string | null;
+  entityType?: string | null;
+  details?: string | null;
+  ipAddress?: string | null;
+  createdAt: string;
+  user?: { name: string; userId: string; role: string } | null;
+}
+
+export interface LoginActivityItem {
+  id: string;
+  details: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  user?: { id: string; name: string; userId: string; email: string; role: string } | null;
+}
+
+export interface AdminDashboardData {
+  totalStudents: number;
+  totalResolvers: number;
+  pendingRequests: number;
+  totalIssues: number;
+  resolvedIssues: number;
+  openIssues: number;
+  highPriorityIssues: number;
+  recentLogs: ActivityLog[];
+}
+
+export interface PublicDashboardData {
+  stats: {
+    totalIssues: number;
+    resolvedIssues: number;
+    openIssues: number;
+    resolutionRate: number;
+  };
+  topVoted: PublicIssueItem[];
+  recentlyResolved: PublicIssueItem[];
+  categoryDistribution: { category: string; count: number }[];
+  highPriorityOpen: PublicIssueItem[];
+}
+
+export interface PublicIssueItem {
+  id: string;
+  title: string;
+  category: string;
+  location: string;
+  priority?: string;
+  status: string;
+  votes: number;
+  createdAt?: string;
+  resolvedAt?: string | null;
+  resolutionNote?: string | null;
 }
 
 export interface ApiResponse<T = any> {

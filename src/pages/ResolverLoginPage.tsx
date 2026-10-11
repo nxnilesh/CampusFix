@@ -22,9 +22,9 @@ export const ResolverLoginPage: React.FC = () => {
 
     try {
       setLoading(true);
-      await login({ identifier: identifier.trim(), password, expectedRole: 'resolver' });
+      const user = await login({ identifier: identifier.trim(), password, expectedRole: 'resolver' });
       success('Signed in successfully to Facilities Administration.');
-      navigate('/resolver/dashboard');
+      navigate(user.mustChangePassword ? '/resolver/change-password' : '/resolver/dashboard');
     } catch (err: any) {
       error(err.message || 'Login failed. Please verify your credentials.');
     } finally {
@@ -102,7 +102,10 @@ export const ResolverLoginPage: React.FC = () => {
               className="w-full mt-2 py-3.5 rounded-full bg-[#ff3b00] hover:bg-[#e03400] text-white font-bold text-xs tracking-wide uppercase transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-md shadow-[#ff3b00]/20"
             >
               {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Authenticating...</span>
+                </>
               ) : (
                 <>
                   <ShieldCheck className="w-4 h-4" />
@@ -113,6 +116,11 @@ export const ResolverLoginPage: React.FC = () => {
           </form>
 
           <div className="pt-4 border-t border-slate-200 text-center space-y-2">
+            <p className="text-xs">
+              <Link to="/forgot-password?portal=resolver" className="font-semibold text-[#ff3b00] hover:underline">
+                Forgot password?
+              </Link>
+            </p>
             <p className="text-xs text-slate-500">
               New maintenance or operations staff?{' '}
               <Link

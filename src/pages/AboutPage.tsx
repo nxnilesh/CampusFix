@@ -76,7 +76,7 @@ export const AboutPage: React.FC = () => {
               <span>Role-Based Authentication (RBAC)</span>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Role-based authentication powered by signed JWT tokens stored in httpOnly cookies, combined with salted bcrypt password hashing. Student, Resolver, and Admin access is strictly enforced across all server endpoints.
+              Role-based authentication uses signed JWT tokens and salted bcrypt password hashing. Student sessions are limited to the current browser tab, while Resolver and Admin sessions use secure httpOnly cookies. Access is enforced across server endpoints.
             </p>
           </div>
 

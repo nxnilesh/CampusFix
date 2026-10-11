@@ -1,14 +1,15 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
-  allowedRole: 'student' | 'resolver';
+  allowedRole: 'student' | 'resolver' | 'admin';
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRole }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -22,16 +23,30 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRole }) =
   }
 
   if (!user) {
-    const redirectUrl = allowedRole === 'student' ? '/student/login' : '/resolver/login';
+    const redirectUrl =
+      allowedRole === 'admin'
+        ? '/admin/login'
+        : allowedRole === 'student'
+        ? '/student/login'
+        : '/resolver/login';
     return <Navigate to={redirectUrl} replace />;
   }
 
-  const hasAccess =
-    user.role === allowedRole || (allowedRole === 'resolver' && user.role === 'admin');
-
-  if (!hasAccess) {
-    const fallbackUrl = user.role === 'student' ? '/student/dashboard' : '/resolver/dashboard';
+  if (user.role !== allowedRole) {
+    // Redirect based on actual role
+    const fallbackUrl =
+      user.role === 'admin' ? '/admin/dashboard'
+      : user.role === 'resolver' ? '/resolver/dashboard'
+      : '/student/dashboard';
     return <Navigate to={fallbackUrl} replace />;
+  }
+
+  if (
+    allowedRole === 'resolver' &&
+    user.mustChangePassword &&
+    location.pathname !== '/resolver/change-password'
+  ) {
+    return <Navigate to="/resolver/change-password" replace />;
   }
 
   return <Outlet />;
