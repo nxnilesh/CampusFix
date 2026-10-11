@@ -1,5 +1,3 @@
-import { Sendpository, SendpositoryError } from 'sendpository';
-
 type AuthEmailPurpose = 'verification' | 'password-reset';
 type EmailPurpose = AuthEmailPurpose | 'resolver-approval';
 type EmailContent = {
@@ -13,8 +11,9 @@ export const EMAIL_DELIVERY_ERROR =
   'Unable to send verification email. Please try again.';
 
 type EmailDeliveryFailure =
-  | 'missing_credentials'
-  | 'provider_rejected'
+  | 'missing_configuration'
+  | 'endpoint_rejected'
+  | 'invalid_response'
   | 'network_error';
 
 export class EmailDeliveryError extends Error {
@@ -65,57 +64,88 @@ async function deliverEmail(
   email: EmailContent,
   purpose: EmailPurpose
 ): Promise<void> {
-  const apiKey = process.env.SENDPOSITORY_API_KEY?.trim();
-  const from = process.env.SENDPOSITORY_FROM_EMAIL?.trim();
-  console.info('[CampusFix] Starting Sendpository email delivery.', {
+  const endpoint = process.env.GOOGLE_APPS_SCRIPT_URL?.trim();
+  const secret = process.env.GOOGLE_APPS_SCRIPT_SECRET?.trim();
+  console.info('[CampusFix] Starting Apps Script email delivery.', {
     purpose,
     recipientDomain: email.to.trim().split('@')[1]?.toLowerCase() ?? 'unknown',
-    credentialsConfigured: Boolean(apiKey && from),
+    credentialsConfigured: Boolean(endpoint && secret),
   });
 
-  if (!apiKey || !from) {
+  if (!endpoint || !secret) {
     throw reportEmailFailure(
-      new EmailDeliveryError(
-        'missing_credentials',
-        undefined,
-        'SENDPOSITORY_API_KEY and SENDPOSITORY_FROM_EMAIL must be configured.'
-      ),
+      new EmailDeliveryError('missing_configuration'),
       purpose
     );
   }
 
+  let endpointUrl: URL;
   try {
-    const sendpository = new Sendpository(apiKey, { timeout: 10_000 });
-    await sendpository.emails.send({
-      from,
-      to: [email.to],
-      subject: email.subject,
-      text: email.text,
-      html: email.html,
-    });
-    console.info('[CampusFix] Sendpository email accepted.', { purpose });
-  } catch (error) {
-    const providerError = error instanceof SendpositoryError ? error : undefined;
-    const failure: EmailDeliveryFailure = providerError?.type === 'connection_error'
-      ? 'network_error'
-      : 'provider_rejected';
+    endpointUrl = new URL(endpoint);
+  } catch {
+    throw reportEmailFailure(new EmailDeliveryError('missing_configuration'), purpose);
+  }
+  if (endpointUrl.protocol !== 'https:') {
     throw reportEmailFailure(
-      new EmailDeliveryError(
-        failure,
-        providerError?.status || undefined,
-        providerError?.type ?? 'unexpected_error'
-      ),
+      new EmailDeliveryError('missing_configuration'),
       purpose
     );
   }
+
+  let response: Response;
+  try {
+    response = await fetch(endpointUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: secret,
+        to: email.to,
+        subject: email.subject,
+        body: email.text,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    throw reportEmailFailure(new EmailDeliveryError('network_error'), purpose);
+  }
+
+  let responseBody: unknown;
+  try {
+    responseBody = await response.json();
+  } catch {
+    throw reportEmailFailure(
+      new EmailDeliveryError('invalid_response', response.status),
+      purpose
+    );
+  }
+
+  if (!response.ok) {
+    throw reportEmailFailure(
+      new EmailDeliveryError('endpoint_rejected', response.status),
+      purpose
+    );
+  }
+
+  if (
+    typeof responseBody !== 'object' ||
+    responseBody === null ||
+    !('success' in responseBody) ||
+    responseBody.success !== true
+  ) {
+    throw reportEmailFailure(
+      new EmailDeliveryError('invalid_response', response.status),
+      purpose
+    );
+  }
+
+  console.info('[CampusFix] Apps Script email accepted.', { purpose });
 }
 
 function reportEmailFailure(error: EmailDeliveryError, purpose: EmailPurpose): EmailDeliveryError {
-  console.error('[CampusFix] Sendpository email delivery failed.', {
+  console.error('[CampusFix] Apps Script email delivery failed.', {
     purpose,
     failure: error.failure,
     ...(error.providerStatus ? { providerStatus: error.providerStatus } : {}),
-    ...(error.diagnostic ? { providerErrorType: error.diagnostic } : {}),
   });
   return error;
 }
